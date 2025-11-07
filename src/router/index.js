@@ -1,17 +1,30 @@
-import { createWebHistory, createRouter } from 'vue-router'
+import routes from "./routes";
+import { useAuthStore } from "@/store/auth";
+import { createRouter, createWebHistory } from "vue-router";
 
-import routes from './routes'
+const protectedRoutes = ["/eu", "/eu/editar"];
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
-      path: '/',
-      name: 'home',
-      component: () => import('../layouts/DefaultLayout.vue'),
+      path: "/",
+      name: "home",
+      component: () => import("../layouts/DefaultLayout.vue"),
       children: routes,
-    }
-  ]
-})
+    },
+  ],
+});
 
-export default router
+router.beforeEach((to, from, next) => {
+  const store = useAuthStore();
+  const isLoggedIn = store.isLoggedIn;
+
+  if (protectedRoutes.includes(to.path) && !isLoggedIn) {
+    next("/login");
+  } else {
+    next();
+  }
+});
+
+export default router;

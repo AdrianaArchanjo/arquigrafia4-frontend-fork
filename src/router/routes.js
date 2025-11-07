@@ -1,8 +1,45 @@
+import {
+  DEFAULT_VIEW_ROUTE,
+  resolveViewOptionByRoute,
+} from "@/constants/viewModes";
+
+const redirectToDefaultView = (to) => ({
+  name: "explore",
+  params: {
+    ...to.params,
+    viewMode: DEFAULT_VIEW_ROUTE,
+  },
+  query: to.query,
+  hash: to.hash,
+});
+
 export default [
   {
     path: "/",
+    redirect: redirectToDefaultView,
+  },
+  {
+    path: "/explore",
+    redirect: redirectToDefaultView,
+  },
+  {
+    path: "/explore/acervo",
+    redirect: redirectToDefaultView,
+  },
+  {
+    path: "/explore/acervo/:viewMode",
     name: "explore",
     component: () => import("../views/HomePage.vue"),
+    beforeEnter: (to) => {
+      const option = resolveViewOptionByRoute(to.params.viewMode);
+      if (option.route !== to.params.viewMode) {
+        return redirectToDefaultView({
+          ...to,
+          params: { ...to.params, viewMode: option.route },
+        });
+      }
+      return true;
+    },
   },
   {
     path: "/image/:id",
@@ -37,13 +74,22 @@ export default [
   },
   // Profile routes
   {
-    path: "/profile",
-    name: "view-profile",
-    component: () => import("../views/Profile/ViewProfile.vue"),
+    path: "/eu",
+    name: "my-profile",
+    component: () => import("../views/Profile/ViewPrivateProfile.vue"),
   },
   {
-    path: "/profile/edit",
-    name: "edit-profile",
+    path: "/eu/editar",
+    name: "edit-my-profile",
     component: () => import("../views/Profile/EditProfile.vue"),
-  }
+  },
+  {
+    path: "/profile",
+    redirect: "/",
+  },
+  {
+    path: "/profile/:id",
+    name: "view-profile",
+    component: () => import("../views/Profile/ViewPublicProfile.vue")
+  },
 ];

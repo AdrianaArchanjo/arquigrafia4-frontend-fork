@@ -16,7 +16,7 @@ jobs:
       - name: 🧱 Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: 📥 Install dependencies
         run: npm ci
@@ -39,6 +39,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          strip_components: 1
           source: "dist/*"
           target: ${{ secrets.REMOTE_PATH }}/dist
           rm: true

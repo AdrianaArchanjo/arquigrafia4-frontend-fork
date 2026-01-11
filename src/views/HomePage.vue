@@ -1,55 +1,45 @@
 <template>
-  <div>
+  <div class="homepage-layout">
     <div class="tabs-container px-3 px-md-4">
       <ul class="nav nav-underline tabs-nav">
         <li class="nav-item">
-          <button
-            class="nav-link active"
-            aria-current="page"
-            data-label="Acervo"
-          >
-            Acervo
-          </button>
+          <button class="nav-link active" aria-current="page">Acervo</button>
         </li>
         <li class="nav-item">
-          <button class="nav-link" data-label="Percurso">Percurso</button>
+          <button class="nav-link">Percurso</button>
         </li>
         <li class="nav-item">
-          <button class="nav-link" data-label="Colecoes">Coleções</button>
+          <button class="nav-link">Coleções</button>
         </li>
       </ul>
     </div>
 
-    <template v-if="hasNoResults">
-      <no-search-results
-        @clear="handleClearSearch"
-        @new-search="handleNewSearch"
-      />
-    </template>
+    <main id="main-content" role="main">
+      <template v-if="hasNoResults">
+        <no-search-results
+          @clear="handleClearSearch"
+          @new-search="handleNewSearch"
+        />
+      </template>
 
-    <template v-else-if="viewMode === 'grid'">
-      <div class="px-3 px-md-4 pb-4 pt-2" data-cy="view-grid">
-        <view-grid />
-      </div>
-    </template>
+      <template v-else>
+        <div v-if="viewMode === 'grid'" class="px-3 px-md-4 pb-4 pt-2">
+          <view-grid />
+        </div>
+        <div v-else-if="viewMode === 'mosaic'">
+          <view-mosaic />
+        </div>
+        <div v-else>
+          <view-map />
+        </div>
+      </template>
+    </main>
 
-    <template v-else-if="viewMode === 'mosaic'">
-      <div data-cy="view-mosaic">
-        <view-mosaic />
-      </div>
-    </template>
-
-    <template v-else>
-      <div data-cy="view-map">
-        <view-map />
-      </div>
-    </template>
-    <div class="toolbar" data-cy="toolbar">
+    <div class="toolbar-wrapper">
       <template v-if="isMobile">
         <page-toolbar-mobile
           :view-selection="viewSelection"
           :search-mode="searchMode"
-          data-cy="toolbar-mobile"
           @search-mode-change="handleMobileSearchModeChange"
           @open-view-menu="openViewMenu"
           @open-search-text="openSearchText"
@@ -66,63 +56,33 @@
           :advanced-filters="advancedFilters"
           :view-selection="viewSelection"
           :map-settings="mapSettings"
-          data-cy="toolbar-desktop"
           @search-mode-change="handleToolbarSearchModeChange"
           @update:text-query="handleTextQueryUpdate"
           @update:date-range="handleDateRangeUpdate"
           @update:color="handleColorUpdate"
           @update:map-settings="handleMapSettingsUpdate"
           @view-change="handleViewChange"
-          @view-subcontrol="handleToolbarViewSubcontrol"
           @open-advanced-search="openAdvancedSearch"
           @confirm="handleToolbarConfirm"
         />
       </template>
     </div>
 
-    <!-- Mobile Drawers -->
-    <mobile-drawer-view-menu
-      v-model="drawerViewMenu"
-      @select="handleMobileViewChange"
-    />
-
-    <mobile-drawer-search-text
-      v-model="drawerSearchText"
-      :filters="advancedFilters"
-      @update:filters="handleAdvancedFiltersUpdate"
-      @open="handleDrawerTextOpen"
-      @confirm="confirmAdvancedDrawer"
-    />
-
-    <mobile-drawer-search-color
-      v-model="drawerSearchColor"
-      :available-colors="availableColors"
-      :value="selectedColor"
-      @update:value="handleColorUpdate"
-      @open="handleDrawerColorOpen"
-      @confirm="confirmColor"
-    />
-
-    <mobile-drawer-search-date
-      v-model="drawerSearchDate"
-      :value="dateRange"
-      @update:value="handleDateRangeUpdate"
-      @open="handleDrawerDateOpen"
-      @confirm="confirmDate"
-    />
-
-    <advanced-search-modal
-      v-model="modalAdvancedSearch"
-      :filters="advancedFilters"
-      @confirm="confirmAdvancedSearch"
-    />
+    <mobile-drawer-view-menu v-model="drawerViewMenu" @select="handleMobileViewChange" />
+    <mobile-drawer-search-text v-model="drawerSearchText" :filters="advancedFilters" @confirm="confirmAdvancedSearch" />
+    <mobile-drawer-search-color v-model="drawerSearchColor" :available-colors="availableColors" :value="selectedColor" @confirm="confirmColor" />
+    <mobile-drawer-search-date v-model="drawerSearchDate" :value="dateRange" @confirm="handleDateRangeUpdate" />
+    <advanced-search-modal v-model="modalAdvancedSearch" :filters="advancedFilters" @confirm="confirmAdvancedSearch" />
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useRouteQuery } from "@vueuse/router";
+import { useBreakpoints } from "@vueuse/core";
+
+// --- IMPORTAÇÕES DE COMPONENTES ---
 import PageToolbar from "@/components/Toolbar.vue";
 import PageToolbarMobile from "@/components/ToolbarMobile.vue";
 import MobileDrawerSearchDate from "@/components/homepage/MobileDrawerSearchDate.vue";
@@ -134,12 +94,9 @@ import ViewGrid from "@/components/homepage/ViewGrid.vue";
 import ViewMap from "@/components/homepage/ViewMap.vue";
 import ViewMosaic from "@/components/homepage/ViewMosaic.vue";
 import NoSearchResults from "@/components/homepage/NoSearchResults.vue";
-import { useBreakpoints } from "@vueuse/core";
-import {
-  selectionToViewMode,
-  selectionToViewRoute,
-  viewRouteToSelection,
-} from "@/constants/viewModes";
+
+// --- UTILITÁRIOS ---
+import { selectionToViewMode, selectionToViewRoute, viewRouteToSelection } from "@/constants/viewModes";
 import { useSearchQuery } from "@/composables/useSearchQuery";
 import { api } from "@/services/api";
 import createDefaultAdvancedFilters from "@/helpers/createDefaultAdvancedFilters";
@@ -149,110 +106,69 @@ const router = useRouter();
 const breakpoints = useBreakpoints({ md: 768 });
 const isMobile = breakpoints.smaller("md");
 
-const viewSelection = ref(viewRouteToSelection(route.params.viewMode));
+const viewSelection = ref(viewRouteToSelection(route.params.viewMode) || 'grid');
 const viewMode = computed(() => selectionToViewMode(viewSelection.value));
 
-const { searchMode, loadSnapshot, setSearchMode, submitSearch } =
-  useSearchQuery();
+const { searchMode, loadSnapshot, setSearchMode, submitSearch } = useSearchQuery();
 
 const textQuery = ref("");
 const dateRange = ref({ start: "", end: "" });
 const selectedColor = ref(null);
 const advancedFilters = ref(createDefaultAdvancedFilters());
 const mapSettingsQuery = useRouteQuery("map-settings", "2d");
+const hasNoResults = ref(false);
+const isSearching = ref(false);
 
-function normalizeMapSettings(value) {
-  return value === "3d" ? "3d" : "2d";
-}
+const availableColors = ref(["#000000", "#EF4444", "#F59E0B", "#10B981", "#3B82F6", "#8B5CF6"]);
 
+// --- LÓGICA DE BUSCA E SINCRONIZAÇÃO ---
+
+function normalizeMapSettings(value) { return value === "3d" ? "3d" : "2d"; }
 const mapSettings = ref(normalizeMapSettings(mapSettingsQuery.value));
-
-watch(
-  mapSettingsQuery,
-  (value) => {
-    mapSettings.value = normalizeMapSettings(value);
-  },
-  { immediate: false }
-);
-
-const drawerViewMenu = ref(false);
-const drawerSearchText = ref(false);
-const drawerSearchColor = ref(false);
-const drawerSearchDate = ref(false);
-const modalAdvancedSearch = ref(false);
-
-const availableColors = ref([
-  "#000000",
-  "#EF4444",
-  "#F59E0B",
-  "#10B981",
-  "#3B82F6",
-  "#8B5CF6",
-]);
 
 function syncFromSnapshot(mode) {
   const snapshot = loadSnapshot(mode);
+  if (!snapshot) return;
   switch (snapshot.mode) {
-    case "textual":
-      textQuery.value = snapshot.value || "";
-      break;
-    case "data":
-      dateRange.value = {
-        start: snapshot.value?.start || "",
-        end: snapshot.value?.end || "",
-      };
-      break;
-    case "cor":
-      selectedColor.value = snapshot.value || null;
-      break;
-    case "avancada":
-      advancedFilters.value = {
-        ...createDefaultAdvancedFilters(),
-        terms: snapshot.value?.terms || [],
-        locations: snapshot.value?.locations || [],
-        tags: snapshot.value?.tags || [],
-        use: snapshot.value?.use || null,
-      };
-      break;
-    default:
-      break;
+    case "textual": textQuery.value = snapshot.value || ""; break;
+    case "data": dateRange.value = snapshot.value || { start: "", end: "" }; break;
+    case "cor": selectedColor.value = snapshot.value || null; break;
+    case "avancada": advancedFilters.value = { ...createDefaultAdvancedFilters(), ...snapshot.value }; break;
   }
 }
 
-syncFromSnapshot(searchMode.value);
+onMounted(() => {
+  syncFromSnapshot(searchMode.value);
+  // Se já houver uma busca na URL ao carregar (vindo da barra global)
+  if (route.query.q) handleVoiceSearch(route.query.q);
+});
 
-watch(
-  () => searchMode.value,
-  (mode) => {
-    syncFromSnapshot(mode);
+watch(() => searchMode.value, (mode) => syncFromSnapshot(mode));
+
+// ESCUTA A URL: Se a barra global no App.vue mudar a URL, a Home reage aqui
+watch(() => route.query.q, (newTerm) => {
+  if (newTerm) handleVoiceSearch(newTerm);
+});
+
+async function performSearch({ mode, value }) {
+  isSearching.value = true;
+  try {
+    const result = await api.searchImages({ mode, value });
+    hasNoResults.value = result.items.length === 0;
+  } catch (error) {
+    console.error("Erro na busca:", error);
+  } finally {
+    isSearching.value = false;
   }
-);
-
-watch(
-  () => route.params.viewMode,
-  (newViewMode) => {
-    viewSelection.value = viewRouteToSelection(newViewMode);
-  },
-  { immediate: true }
-);
-
-function updateRoute(selection) {
-  const targetRoute = selectionToViewRoute(selection);
-  if (targetRoute === route.params.viewMode) {
-    return;
-  }
-
-  router.push({
-    name: "explore",
-    params: { viewMode: targetRoute },
-    query: route.query,
-    hash: route.hash,
-  });
 }
 
-function handleViewChange({ selection }) {
-  viewSelection.value = selection;
-  updateRoute(selection);
+// --- HANDLERS ---
+
+async function handleVoiceSearch(term) {
+  if (!term) return;
+  textQuery.value = term;
+  await handleToolbarSearchModeChange("textual");
+  handleToolbarConfirm({ mode: "textual", value: term });
 }
 
 async function handleToolbarConfirm({ mode, value }) {
@@ -265,162 +181,64 @@ async function handleToolbarSearchModeChange(mode) {
   syncFromSnapshot(mode);
 }
 
-function handleTextQueryUpdate(value) {
-  textQuery.value = value;
+function handleViewChange({ selection }) {
+  viewSelection.value = selection;
+  const targetRoute = selectionToViewRoute(selection);
+  router.push({ name: "explore", params: { viewMode: targetRoute }, query: route.query });
 }
 
-function handleDateRangeUpdate(range) {
-  dateRange.value = { ...range };
-}
+// UI Handlers
+const drawerViewMenu = ref(false);
+const drawerSearchText = ref(false);
+const drawerSearchColor = ref(false);
+const drawerSearchDate = ref(false);
+const modalAdvancedSearch = ref(false);
 
-function handleColorUpdate(color) {
-  selectedColor.value = color;
-}
-
-function updateMapSettings(value) {
-  const normalized = normalizeMapSettings(value);
-  mapSettings.value = normalized;
-  mapSettingsQuery.value = normalized;
-}
-
-function handleMapSettingsUpdate(value) {
-  updateMapSettings(value);
-}
-
-function openAdvancedSearch() {
-  modalAdvancedSearch.value = true;
-}
+function openAdvancedSearch() { modalAdvancedSearch.value = true; }
+function openViewMenu() { drawerViewMenu.value = true; }
+function openSearchText() { drawerSearchText.value = true; }
+function openSearchColor() { drawerSearchColor.value = true; }
+function openSearchDate() { drawerSearchDate.value = true; }
 
 async function confirmAdvancedSearch(payload) {
-  handleAdvancedFiltersUpdate(payload);
-  submitSearch({ mode: "avancada", value: advancedFilters.value });
+  advancedFilters.value = { ...createDefaultAdvancedFilters(), ...payload };
+  handleToolbarConfirm({ mode: "avancada", value: advancedFilters.value });
   modalAdvancedSearch.value = false;
-  await performSearch({ mode: "avancada", value: advancedFilters.value });
-}
-
-function handleToolbarViewSubcontrol(payload) {
-  updateMapSettings(payload.value);
-}
-
-function handleDrawerTextOpen() {
-  syncFromSnapshot("avancada");
-}
-
-function handleDrawerColorOpen() {
-  syncFromSnapshot("cor");
-}
-
-function handleDrawerDateOpen() {
-  syncFromSnapshot("data");
 }
 
 async function confirmColor(color) {
   selectedColor.value = color;
-  submitSearch({ mode: "cor", value: color });
+  handleToolbarConfirm({ mode: "cor", value: color });
   drawerSearchColor.value = false;
-  await performSearch({ mode: "cor", value: color });
 }
 
-async function confirmDate(range) {
-  dateRange.value = { ...range };
-  submitSearch({ mode: "data", value: range });
-  drawerSearchDate.value = false;
-  await performSearch({ mode: "data", value: range });
-}
-
-async function confirmAdvancedDrawer({ value }) {
-  handleAdvancedFiltersUpdate(value);
-  submitSearch({ mode: "avancada", value: advancedFilters.value });
-  drawerSearchText.value = false;
-  await performSearch({ mode: "avancada", value: advancedFilters.value });
-}
-
-function handleMobileSearchModeChange(mode) {
-  handleToolbarSearchModeChange(mode);
-}
-
-function handleMobileViewChange({ selection }) {
-  updateRoute(selection);
-  viewSelection.value = selection;
-}
-
-function openViewMenu() {
-  drawerViewMenu.value = true;
-}
-
-function openSearchText() {
-  drawerSearchText.value = true;
-}
-
-function openSearchColor() {
-  drawerSearchColor.value = true;
-}
-
-function openSearchDate() {
-  drawerSearchDate.value = true;
-}
-
-function handleAdvancedFiltersUpdate(filters) {
-  advancedFilters.value = {
-    ...createDefaultAdvancedFilters(),
-    terms: filters?.terms || [],
-    locations: filters?.locations || [],
-    tags: filters?.tags || [],
-    use: filters?.use || null,
-  };
-}
-
-const hasNoResults = ref(false);
-const isSearching = ref(false);
-
-async function performSearch({ mode, value }) {
-  isSearching.value = true;
-  try {
-    const result = await api.searchImages({ mode, value });
-    hasNoResults.value = result.items.length === 0;
-  } finally {
-    isSearching.value = false;
-  }
-}
-
-function handleClearSearch() {
-  textQuery.value = "";
-  dateRange.value = { start: "", end: "" };
-  selectedColor.value = null;
-  advancedFilters.value = createDefaultAdvancedFilters();
-  hasNoResults.value = false;
-}
-
-function handleNewSearch() {
-  hasNoResults.value = false;
-  if (isMobile.value) {
-    openSearchText();
-  } else {
-    openAdvancedSearch();
-  }
-}
+function handleTextQueryUpdate(val) { textQuery.value = val; }
+function handleDateRangeUpdate(val) { dateRange.value = val; }
+function handleColorUpdate(val) { selectedColor.value = val; }
+function handleMapSettingsUpdate(val) { mapSettings.value = normalizeMapSettings(val); mapSettingsQuery.value = val; }
+function handleMobileViewChange({ selection }) { handleViewChange({ selection }); drawerViewMenu.value = false; }
+function handleMobileSearchModeChange(mode) { handleToolbarSearchModeChange(mode); }
+function handleClearSearch() { textQuery.value = ""; hasNoResults.value = false; }
+function handleNewSearch() { hasNoResults.value = false; isMobile.value ? openSearchText() : openAdvancedSearch(); }
 </script>
 
 <style scoped>
-.container {
+.homepage-layout {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
-
-.tabs-container {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.tabs-nav {
-  max-width: 560px;
-}
-
-.toolbar {
+.tabs-container { padding-top: 1rem; background: transparent; }
+.tabs-nav { border-bottom: 1px solid #dee2e6; margin-bottom: 1rem; }
+#main-content { flex: 1; position: relative; }
+.toolbar-wrapper {
   position: fixed;
-  bottom: 32px;
+  bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
-  max-width: fit-content;
   z-index: 1000;
+  width: auto;
+  max-width: 95vw;
 }
+main { padding-bottom: 100px; }
 </style>

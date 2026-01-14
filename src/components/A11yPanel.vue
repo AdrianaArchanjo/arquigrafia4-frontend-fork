@@ -1,9 +1,11 @@
 <template>
-  <div 
-    v-if="isGuideActive" 
-    class="a11y-reading-guide-line" 
-    :style="{ top: cursorY + 'px' }"
-  ></div>
+  <Teleport to="body">
+    <div 
+      v-if="isGuideActive" 
+      class="a11y-reading-guide-line" 
+      :style="{ top: cursorY + 'px' }"
+    ></div>
+  </Teleport>
 
   <nav class="a11y-container" role="navigation">
     <div class="a11y-bar-main">
@@ -11,7 +13,11 @@
         <button @click="toggleContrast" class="a11y-btn" :class="{ active: isHighContrast }">
           🌓 Contraste
         </button>
-        <button @click="toggleGuide" class="a11y-btn" :class="{ active: isGuideActive }">
+        <button 
+          @click="toggleGuide" 
+          class="a11y-btn" 
+          :class="{ active: isGuideActive }"
+        >
           📖 Guia de Leitura
         </button>
       </div>
@@ -47,24 +53,46 @@ const voiceMessage = ref("");
 const isHighContrast = ref(false);
 const isGuideActive = ref(false);
 const fontSize = ref(100);
-const cursorY = ref(0);
+const cursorY = ref(window.innerHeight / 2); // Inicia no meio da tela
 
 let recognition = null;
 
-// --- FUNÇÃO DE SÍNTESE DE VOZ ---
+// --- SÍNTESE DE VOZ (Feedback Sonoro) ---
 const speak = (text, callback) => {
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel(); // Para qualquer fala anterior
+    window.speechSynthesis.cancel();
     const msg = new SpeechSynthesisUtterance(text);
     msg.lang = 'pt-BR';
-    msg.rate = 1.0;
-    // O callback garante que só abriremos o mic após o PC terminar de falar
-    if (callback) msg.onend = callback; 
+    if (callback) msg.onend = callback;
     window.speechSynthesis.speak(msg);
   }
 };
 
-// --- CONTROLE DO RECONHECIMENTO ---
+// --- ACESSIBILIDADE (Contraste e Guia do Código 2) ---
+const toggleContrast = () => {
+  isHighContrast.value = !isHighContrast.value;
+  document.body.classList.toggle('high-contrast', isHighContrast.value);
+  speak(isHighContrast.value ? "Alto contraste ativado" : "Contraste padrão");
+};
+
+const toggleGuide = () => {
+  isGuideActive.value = !isGuideActive.value;
+  if (isGuideActive.value) {
+    document.body.classList.add('reading-guide-active');
+  } else {
+    document.body.classList.remove('reading-guide-active');
+  }
+  speak(isGuideActive.value ? "Guia de leitura ativado" : "Guia desativado");
+};
+
+const adjustFontSize = (delta) => {
+  fontSize.value = Math.max(70, Math.min(200, fontSize.value + delta));
+  document.documentElement.style.fontSize = `${fontSize.value}%`;
+  // CORREÇÃO: Aciona a voz no zoom
+  speak(`Fonte em ${fontSize.value} por cento`);
+};
+
+// --- RECONHECIMENTO DE VOZ (Lógica Robusta do Código 1) ---
 const toggleVoice = () => {
   if (isListening.value) {
     stopRecognition();
@@ -79,7 +107,7 @@ const initRecognition = () => {
 
   recognition = new Speech();
   recognition.lang = 'pt-BR';
-  recognition.continuous = false; // Ouve apenas uma frase por vez para evitar loops
+  recognition.continuous = false;
   recognition.interimResults = false;
 
   recognition.onstart = () => {
@@ -89,28 +117,17 @@ const initRecognition = () => {
 
   recognition.onresult = (event) => {
     const text = event.results[0][0].transcript.toLowerCase();
-    isListening.value = false; // Fecha o mic imediatamente
-    
-    // Repete o que entendeu antes de processar
+    isListening.value = false;
     voiceMessage.value = `Entendi: "${text}"`;
+    
     speak(`Você disse: ${text}`, () => {
-      processCommand(text); // Só executa a ação após confirmar a fala
+      processCommand(text);
     });
   };
 
-  recognition.onerror = (event) => {
-    if (event.error !== 'aborted') {
-      voiceMessage.value = "Não entendi, tente novamente.";
-      speak("Não consegui ouvir.");
-    }
-    isListening.value = false;
-  };
+  recognition.onerror = () => { isListening.value = false; };
+  recognition.onend = () => { isListening.value = false; };
 
-  recognition.onend = () => {
-    isListening.value = false;
-  };
-
-  // Passo 1: O sistema pede para falar -> Passo 2: Abre o mic (no callback)
   speak("Pode falar agora", () => {
     recognition.start();
   });
@@ -123,63 +140,47 @@ const stopRecognition = () => {
   speak("Comando de voz desativado.");
 };
 
-// --- PROCESSADOR DE COMANDOS (MAPA E BUSCAS) ---
+// --- PROCESSADOR DE COMANDOS (Buscas e Mapa do Código 1) ---
 const processCommand = (text) => {
-  // 1. Buscas (Conforme menu da imagem)
-  if (text.includes("busca avançada")) {
-    emit('voice-search', { type: 'advanced' });
-  } else if (text.includes("busca por data") || text.includes("buscar data")) {
-    emit('voice-search', { type: 'date' });
-  } else if (text.includes("busca por cor") || text.includes("buscar cor")) {
-    emit('voice-search', { type: 'color' });
-  } else if (text.includes("busca textual")) {
-    emit('voice-search', { type: 'text' });
-  } else if (text.includes("buscar") || text.includes("localizar")) {
+  // 1. Buscas
+  if (text.includes("busca avançada")) emit('voice-search', { type: 'advanced' });
+  else if (text.includes("data")) emit('voice-search', { type: 'date' });
+  else if (text.includes("cor")) emit('voice-search', { type: 'color' });
+  else if (text.includes("buscar") || text.includes("localizar")) {
     const term = text.replace(/buscar por|buscar|localizar/g, "").trim();
     emit('voice-search', { type: 'general', query: term });
   }
-
-  // 2. Manipulação do Mapa
+  // 2. Mapa
   else if (text.includes("aumentar zoom") || text.includes("aproximar")) {
     emit('map-control', { action: 'zoom-in' });
+    speak("Aproximando mapa");
   } else if (text.includes("diminuir zoom") || text.includes("afastar")) {
     emit('map-control', { action: 'zoom-out' });
-  } else if (text.includes("coordenadas") || text.includes("latitude")) {
+    speak("Afastando mapa");
+  } else if (text.includes("coordenadas")) {
     emit('map-control', { action: 'show-coords' });
-  } else if (text.includes("endereço")) {
-    emit('map-control', { action: 'get-address' });
-  } else if (text.includes("georreferenciamento") || text.includes("satélite")) {
-    emit('map-control', { action: 'toggle-layer' });
+    speak("Mostrando coordenadas");
   }
-
-  // 3. Acessibilidade
+  // 3. Atalhos de Acessibilidade via Voz
   else if (text.includes("contraste")) toggleContrast();
   else if (text.includes("guia")) toggleGuide();
   else if (text.includes("mapa")) emit('voice-view-change', 'map');
-  else if (text.includes("grade") || text.includes("mosaico")) emit('voice-view-change', 'mosaic');
 };
 
-// --- ACESSIBILIDADE ---
-const toggleContrast = () => {
-  isHighContrast.value = !isHighContrast.value;
-  document.body.classList.toggle('high-contrast', isHighContrast.value);
-  speak(isHighContrast.value ? "Alto contraste ativado" : "Contraste padrão");
+// --- ATUALIZAÇÃO DO MOUSE (Lógica do Código 2) ---
+const updateCursor = (e) => { 
+  if (isGuideActive.value) {
+    cursorY.value = e.clientY; 
+  }
 };
 
-const toggleGuide = () => {
-  isGuideActive.value = !isGuideActive.value;
-  speak(isGuideActive.value ? "Guia de leitura ativado" : "Guia desativado");
-};
+onMounted(() => {
+  window.addEventListener('mousemove', updateCursor);
+});
 
-const adjustFontSize = (delta) => {
-  fontSize.value = Math.max(70, Math.min(200, fontSize.value + delta));
-  document.documentElement.style.fontSize = `${fontSize.value}%`;
-  speak(`Fonte em ${fontSize.value} por cento`);
-};
-
-const updateCursor = (e) => { cursorY.value = e.clientY; };
-onMounted(() => window.addEventListener('mousemove', updateCursor));
-onUnmounted(() => window.removeEventListener('mousemove', updateCursor));
+onUnmounted(() => {
+  window.removeEventListener('mousemove', updateCursor);
+});
 </script>
 
 <style scoped>
@@ -188,12 +189,10 @@ onUnmounted(() => window.removeEventListener('mousemove', updateCursor));
   color: white;
   padding: 8px 20px;
   border-bottom: 2px solid #ed6921;
+  position: relative;
+  z-index: 1000;
 }
-.a11y-bar-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+.a11y-bar-main { display: flex; justify-content: space-between; align-items: center; }
 .a11y-group { display: flex; align-items: center; gap: 12px; }
 .a11y-btn {
   background: #333;
@@ -203,7 +202,8 @@ onUnmounted(() => window.removeEventListener('mousemove', updateCursor));
   border-radius: 4px;
   cursor: pointer;
 }
-.a11y-btn.active { background: #ed6921; border-color: #ed6921; }
+.a11y-btn.active { background: #ed6921; border-color: white; }
+
 .voice-main-btn {
   background: #ed6921;
   border: none;
@@ -215,21 +215,21 @@ onUnmounted(() => window.removeEventListener('mousemove', updateCursor));
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.3s;
 }
-.voice-main-btn.is-listening {
-  background: #d63031;
-  box-shadow: 0 0 10px #d63031;
-}
-.voice-feedback { color: #f1c40f; font-size: 13px; font-weight: bold; }
+.voice-main-btn.is-listening { background: #d63031; box-shadow: 0 0 10px #d63031; }
+.voice-feedback { color: #f1c40f; font-size: 13px; font-weight: bold; margin-left: 10px; }
+
+/* ESTILO DA GUIA (Do Código 2 - Máxima Visibilidade) */
 .a11y-reading-guide-line {
   position: fixed;
   left: 0;
-  width: 100%;
-  height: 4px;
+  width: 100vw;
+  height: 6px;
   background: yellow;
-  z-index: 99999;
+  z-index: 2147483647;
   pointer-events: none;
   box-shadow: 0 0 15px yellow;
+  border-top: 1px solid black;
+  border-bottom: 1px solid black;
 }
 </style>
